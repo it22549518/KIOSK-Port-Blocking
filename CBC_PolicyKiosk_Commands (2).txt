@@ -1,0 +1,296 @@
+=====================================================================
+  CBC POLICY KIOSK - RUN COMMANDS & DB TESTING QUICK REFERENCE
+  Commercial Bank of Ceylon PLC - IT Operations
+=====================================================================
+
+----------------------------------------------------------------------
+1. INSTALL DEPENDENCIES (run once)
+----------------------------------------------------------------------
+
+-- Check Python is installed
+python --version
+
+-- Check pip is installed
+pip --version
+
+-- Install required library (image-based kiosk v3)
+pip install Pillow
+
+-- If pip does not work, try this instead
+python -m pip install Pillow
+
+-- Install with upgrade (if already installed but need latest version)
+python -m pip install --upgrade Pillow
+
+-- Install for current user only (no admin rights needed)
+python -m pip install Pillow --user
+
+-- Install for ALL users on the PC (run CMD as Administrator)
+python -m pip install Pillow --upgrade
+
+-- Check if Pillow is already installed
+pip show Pillow
+
+-- Check ALL installed libraries on this PC
+pip list
+
+-- Install both libraries (covers PDF version and image version)
+pip install Pillow PyMuPDF
+
+-- Upgrade pip itself (do this if pip gives errors)
+python -m pip install --upgrade pip
+
+-- Verify all required libraries are installed correctly
+python -c "from PIL import Image; print('Pillow OK -', Image.__version__)"
+
+-- Offline install (if PC has no internet - use .whl file)
+pip install Pillow --no-index --find-links "C:\Installers\"
+
+-- Uninstall if needed
+pip uninstall Pillow
+
+
+----------------------------------------------------------------------
+2. RUN THE KIOSK VIEWER (local test)
+----------------------------------------------------------------------
+
+python PolicyViewer.py --images-dir "C:\CBCTest\images" --db "C:\CBCTest\policy_log.db" --user "TestUser" --pc "TestPC" --domain "CBC" --accept-flag "C:\Temp\test.tmp"
+
+
+----------------------------------------------------------------------
+3. RUN THE KIOSK VIEWER (on AD network share)
+----------------------------------------------------------------------
+
+python \\CBC-DC01\PolicyKiosk\PolicyViewer.py --images-dir "\\CBC-DC01\PolicyKiosk\images" --db "\\CBC-DC01\PolicyKiosk\policy_log.db" --user "%USERNAME%" --pc "%COMPUTERNAME%" --domain "%USERDOMAIN%" --accept-flag "C:\Temp\test.tmp"
+
+
+----------------------------------------------------------------------
+4. DB TESTING COMMANDS
+----------------------------------------------------------------------
+
+-- View ALL records
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute('SELECT * FROM policy_acceptance')]; con.close()"
+
+-- Count total accepted users
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); print('Total accepted:', con.execute('SELECT COUNT(*) FROM policy_acceptance').fetchone()[0]); con.close()"
+
+-- Search by USERNAME (change jdoe to actual username)
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute(\"SELECT * FROM policy_acceptance WHERE username='TestUser'\")]; con.close()"
+
+-- Search by PC NAME
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute(\"SELECT * FROM policy_acceptance WHERE pc_name='TestPC'\")]; con.close()"
+
+-- Search by IP ADDRESS
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute(\"SELECT * FROM policy_acceptance WHERE ip_address='10.170.42.36'\")]; con.close()"
+
+-- View records from TODAY only
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute(\"SELECT * FROM policy_acceptance WHERE DATE(start_time)=DATE('now')\")]; con.close()"
+
+-- View LATEST 10 records
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute('SELECT * FROM policy_acceptance ORDER BY end_time DESC LIMIT 10')]; con.close()"
+
+-- Show read duration in minutes and seconds
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(f\"User: {r[1]:20s} PC: {r[2]:15s} Duration: {r[7]//60}m {r[7]%60}s  IP: {r[4]}\") for r in con.execute('SELECT * FROM policy_acceptance ORDER BY end_time DESC')]; con.close()"
+
+-- Check if SPECIFIC USER already accepted
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); r=con.execute(\"SELECT COUNT(*) FROM policy_acceptance WHERE username='TestUser'\").fetchone(); print('Accepted: YES' if r[0]>0 else 'Accepted: NO'); con.close()"
+
+-- Delete/reset a specific user (force re-read)
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); con.execute(\"DELETE FROM policy_acceptance WHERE username='TestUser'\"); con.commit(); print('User reset done'); con.close()"
+
+-- Delete ALL records (use for new policy version rollout)
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); con.execute('DELETE FROM policy_acceptance'); con.commit(); print('All records cleared'); con.close()"
+
+-- Show DB table structure
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute('PRAGMA table_info(policy_acceptance)')]; con.close()"
+
+
+----------------------------------------------------------------------
+5. REPORT TOOL COMMANDS (PolicyReport.py)
+----------------------------------------------------------------------
+
+-- Print all records in table format
+python PolicyReport.py --db "C:/CBCTest/policy_log.db"
+
+-- Export HTML report (opens in browser)
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --export html
+
+-- Export CSV (open in Excel)
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --export csv
+
+-- Show statistics (avg read time, total users etc.)
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --stats
+
+-- Reset one user
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --reset TestUser
+
+-- Reset ALL users
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --reset-all
+
+
+----------------------------------------------------------------------
+6. DB COLUMN REFERENCE
+----------------------------------------------------------------------
+
+  Column 0  : id                  (auto number)
+  Column 1  : username            (AD username)
+  Column 2  : pc_name             (computer name)
+  Column 3  : domain              (AD domain)
+  Column 4  : ip_address          (real LAN IP)
+  Column 5  : start_time          (kiosk opened time)
+  Column 6  : end_time            (accept clicked time)
+  Column 7  : read_duration_sec   (seconds spent reading)
+  Column 8  : policy_version      (v1.0, v2.0 etc.)
+  Column 9  : accepted            (1 = yes)
+
+
+----------------------------------------------------------------------
+7. NETWORK SHARE PATHS (after AD deployment)
+----------------------------------------------------------------------
+
+  Share folder : \\CBC-DC01\PolicyKiosk\
+  Images       : \\CBC-DC01\PolicyKiosk\images\
+  Database     : \\CBC-DC01\PolicyKiosk\policy_log.db
+  Viewer       : \\CBC-DC01\PolicyKiosk\PolicyViewer.py
+  GPO Script   : \\CBC-DC01\PolicyKiosk\PolicyLogon.ps1
+
+
+
+----------------------------------------------------------------------
+8. ADMIN WEB PANEL COMMANDS (AdminPanel.py)
+----------------------------------------------------------------------
+
+-- Run admin panel (local test - your PC)
+python AdminPanel.py --db "C:/CBCTest/policy_log.db" --port 5002
+
+-- Then open this in your browser
+http://localhost:5002
+
+-- Run admin panel pointing to network share DB (AD server)
+python AdminPanel.py --db "\\CBC-DC01\PolicyKiosk\policy_log.db" --port 5002
+
+-- Then any admin PC on network can open
+http://CBC-DC01:5002
+
+-- Run on a specific IP so others can access
+python AdminPanel.py --db "C:/CBCTest/policy_log.db" --port 5002
+
+-- Run in background (keep CMD window open)
+start /B python AdminPanel.py --db "C:/CBCTest/policy_log.db" --port 5002
+
+-- Stop the admin panel
+Press Ctrl+C in the CMD window
+
+
+----------------------------------------------------------------------
+9. FIX - DB DELETED BUT KIOSK NOT SHOWING (local flag issue)
+----------------------------------------------------------------------
+
+-- If kiosk still shows "already accepted" after deleting DB,
+-- manually delete the local flag file:
+
+-- Option A: Delete flag for specific user (change TestUser and TestPC)
+del "%LOCALAPPDATA%\CBCPolicyccepted_TestUser_TestPC_v1.0.flag"
+
+-- Option B: Delete ALL local flags
+del /Q "%LOCALAPPDATA%\CBCPolicy\*.flag"
+
+-- Option C: Delete entire local CBC policy folder
+rmdir /S /Q "%LOCALAPPDATA%\CBCPolicy"
+
+-- Then delete DB and run viewer again
+del C:/CBCTest/policy_log.db
+python PolicyViewer.py --images-dir "C:/CBCTest/images" --db "C:/CBCTest/policy_log.db" --user "TestUser" --pc "TestPC" --domain "CBC" --accept-flag "C:/Temp/test.tmp"
+
+
+----------------------------------------------------------------------
+10. FULL TEST WORKFLOW (step by step)
+----------------------------------------------------------------------
+
+STEP 1 - Install library (once only)
+python -m pip install Pillow
+
+STEP 2 - Delete old DB if exists
+del C:\CBCTest\policy_log.db
+
+STEP 3 - Delete old local flags if exists
+rmdir /S /Q "%LOCALAPPDATA%\CBCPolicy"
+
+STEP 4 - Run kiosk viewer
+python PolicyViewer.py --images-dir "C:\CBCTest\images" --db "C:\CBCTest\policy_log.db" --user "TestUser" --pc "TestPC" --domain "CBC" --accept-flag "C:\Temp\test.tmp"
+
+STEP 5 - Go through all 16 pages and click Accept
+
+STEP 6 - Check DB record saved correctly
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute('SELECT * FROM policy_acceptance')]; con.close()"
+
+STEP 7 - Run viewer again to confirm kiosk does NOT open (already accepted)
+python PolicyViewer.py --images-dir "C:\CBCTest\images" --db "C:\CBCTest\policy_log.db" --user "TestUser" --pc "TestPC" --domain "CBC" --accept-flag "C:\Temp\test.tmp"
+
+  Expected output:
+  [SKIP] TestUser already accepted policy v1.0 on TestPC (confirmed in DB).
+
+STEP 8 - Delete DB to test reset behaviour
+del C:\CBCTest\policy_log.db
+
+STEP 9 - Run viewer again - kiosk MUST open again (flag auto deleted)
+python PolicyViewer.py --images-dir "C:\CBCTest\images" --db "C:\CBCTest\policy_log.db" --user "TestUser" --pc "TestPC" --domain "CBC" --accept-flag "C:\Temp\test.tmp"
+
+STEP 10 - Start admin web panel
+python AdminPanel.py --db "C:\CBCTest\policy_log.db" --port 5002
+
+STEP 11 - Open browser
+http://localhost:5002
+
+
+----------------------------------------------------------------------
+11. DUAL MONITOR TEST COMMANDS
+----------------------------------------------------------------------
+
+-- Black out second monitor manually
+DisplaySwitch.exe /internal
+
+-- Run kiosk
+python PolicyViewer.py --images-dir "C:\CBCTest\images" --db "C:\CBCTest\policy_log.db" --user "TestUser" --pc "TestPC" --domain "CBC" --accept-flag "C:\Temp\test.tmp"
+
+-- Restore both monitors manually (if needed)
+DisplaySwitch.exe /extend
+
+-- Note: PolicyViewer.py now handles this automatically.
+-- Second monitor goes black when kiosk starts.
+-- Both monitors restore automatically after Accept is clicked.
+
+
+----------------------------------------------------------------------
+12. RESET / MAINTENANCE COMMANDS
+----------------------------------------------------------------------
+
+-- Reset one user (force them to re-read)
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --reset TestUser
+
+-- Reset ALL users (use when policy version changes)
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --reset-all
+
+-- Delete DB completely and start fresh
+del C:\CBCTest\policy_log.db
+
+-- Delete all local flags on THIS PC
+rmdir /S /Q "%LOCALAPPDATA%\CBCPolicy"
+
+-- View DB records
+python -c "import sqlite3; con=sqlite3.connect('C:/CBCTest/policy_log.db'); [print(r) for r in con.execute('SELECT * FROM policy_acceptance')]; con.close()"
+
+-- Export HTML report
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --export html
+
+-- Export CSV report
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --export csv
+
+-- View statistics
+python PolicyReport.py --db "C:/CBCTest/policy_log.db" --stats
+
+
+----------------------------------------------------------------------
+  IT Operations - Network & Infra Security
+  Commercial Bank of Ceylon PLC
+----------------------------------------------------------------------
